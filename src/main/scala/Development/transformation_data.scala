@@ -12,27 +12,39 @@ class transformations_data(utils: Utils) {
 
   import utils.spark.implicits._
 
+  def maxDayBday(df: DataFrame)  = {
+    val maxDayBdayValue = df.groupBy("bday_day").agg(count("bday_day"))
+      .agg(max("count(bday_day)")).first()(0)
+    maxDayBdayValue
+  }
+
+
+  def minMonthBday(df: DataFrame)  = {
+    df.groupBy("bday_month").agg(count("bday_month").alias("total"))
+      .orderBy("total").first()(0)
+  }
+
+
   def action (): Unit = {
 
-    /** Reading data and transformation data*/
+    /** Reading data and transformation data */
 
-    val input : DataFrame = utils.readTable("inputs.input")
+    val inputData: DataFrame = utils.readTable("inputs.input")
 
+    val outputInfo = transformationsData(inputData)
 
-    def maxDayBday(df: DataFrame)  = {
-      val maxDayBdayValue = df.groupBy("bday_day").agg(count("bday_day"))
-        .agg(max("count(bday_day)")).first()(0)
-      maxDayBdayValue
-    }
+    utils.writeHiveTable(outputInfo,"reporting.outputInfo")
 
-    def minMonthBday(df: DataFrame)  = {
-      df.groupBy("bday_month").agg(count("bday_month").alias("total"))
-        .orderBy("total").first()(0)
-    }
+    /** Write the table */
+
+    //utils.writeS3Table(outputInfo,"s3a://victortestOrange/testOrange")
+
+  }
+
+  def transformationsData(input: DataFrame) = {
 
     val maxDayBdayValue = maxDayBday(input)
     val minMonthBdayValue = minMonthBday(input)
-
 
     /** Post by email providers */
 
@@ -57,20 +69,12 @@ class transformations_data(utils: Utils) {
 
     val referalByMembers = input.groupBy("member_id").agg(sum("referred_by").alias("Total_Referals"))
 
-    val outputInfo = input.filter($"posts" > 1)
+    input.filter($"posts" > 1)
       .join(postByEmail, Seq("email"),"inner")
       .join(referalByMembers,Seq("member_id"), "inner")
       .withColumn("maxDayBday", lit(maxDayBdayValue))
       .withColumn("minMonthBday", lit(minMonthBdayValue))
       .withColumn("yearMaxSingUp", lit(yearMaxSingUp))
-
-
-    /** Write the table */
-
-    utils.writeHiveTable(outputInfo,"reporting.outputInfo")
-
-    //utils.writeS3Table(outputInfo,"s3a://victortestOrange/testOrange")
-
 
   }
 
